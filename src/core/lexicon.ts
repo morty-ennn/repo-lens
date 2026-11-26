@@ -88,21 +88,36 @@ export function isDocsOrFixturePath(p: string): boolean {
     || /\/(docs?|examples?|fixtures?|__tests__)\//i.test(p);
 }
 
-export function isCommentLine(line: string): boolean {
+export function isCommentLine(line: string, file?: string): boolean {
   const t = line.trimStart();
+  // Markdown 的 `# 标题` 不是代码注释；否则 README 的行级结论会被整组误降级。
+  if (file && /\.(md|markdown|mdx|rst)$/i.test(file) && t.startsWith('#')) return false;
   return t.startsWith('//') || t.startsWith('#') || t.startsWith('*')
     || t.startsWith('/*') || t.startsWith('<!--') || t.startsWith('-- ');
 }
 
-/** 占位符白名单：命中即把密钥类结论降级为 info（spec SEC-09） */
+/** 占位符白名单：命中即把密钥类结论降级为 info（spec SEC-09）
+ *  先剥掉厂商前缀再判断，避免 `sk-your_key_here`、`ghp_xxxx` 这类示例值被判成真凭证。
+ */
 export function isPlaceholder(value: string): boolean {
   const v = value.trim();
   if (v.length === 0) return true;
+
+  const stripped = v.replace(/^(?:sk-|ghp_|github_pat_|xox[baprs]-|AKIA|AKID|LTAI)/i, '');
+  return isPlaceholderBody(v) || (stripped !== v && isPlaceholderBody(stripped));
+}
+
+function isPlaceholderBody(v: string): boolean {
   if (/^(your|xxx+|placeholder|change[_-]?me|example|dummy|test|sample|todo|none|null|undefined|fake|mock|redacted)/i.test(v)) return true;
   if (/[<>{}]|\$\{|%[A-Z_]+%/.test(v)) return true;
   if (/^[*.\-_x]+$/i.test(v)) return true;
   if (/^(process\.env|os\.environ|import\.meta\.env|env\.)/i.test(v)) return true;
   if (/(your|replace|insert|put)[-_ ].*(key|token|secret|here)/i.test(v)) return true;
+  if (/(?:^|[_-])(?:your|example|placeholder|dummy|fake|mock|test|sample|changeme|redacted)(?:$|[_-])/i.test(v)) return true;
+  if (/(?:example|placeholder|changeme|redacted)/i.test(v)) return true;
+  if (/_here$/i.test(v)) return true;
+  if (/x{4,}/i.test(v)) return true;
+  if (/(?:\.{3,}|\*{3,}|-{3,}|_{3,})/.test(v)) return true;
   return false;
 }
 

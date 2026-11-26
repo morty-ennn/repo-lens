@@ -37,6 +37,7 @@ export function depsRules(ctx: ScanContext): Finding[] {
         severity: 'minor',
         title: '有 package.json，但缺少 lockfile',
         file: packageJsonPath ?? 'package.json',
+        line: 1,
         detail: '没有 package-lock.json / pnpm-lock.yaml / yarn.lock，依赖版本不可复现',
         remediation: '提交 lockfile，保证不同机器安装结果一致',
       }),
@@ -51,6 +52,7 @@ export function depsRules(ctx: ScanContext): Finding[] {
         severity: 'minor',
         title: 'package.json 里没有任何依赖声明',
         file: packageJsonPath ?? 'package.json',
+        line: 1,
         detail: '既无 dependencies 也无 devDependencies',
       }),
     );

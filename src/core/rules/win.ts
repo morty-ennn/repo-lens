@@ -14,6 +14,7 @@ export function winRules(ctx: ScanContext): Finding[] {
         severity: 'info',
         title: '存在 Windows 专用脚本',
         file: path,
+        line: 1,
         detail: '该脚本只能在 Windows 上直接运行，非 Windows 环境需要等价替代',
       }),
     );
@@ -43,6 +44,7 @@ export function winRules(ctx: ScanContext): Finding[] {
           severity: 'major',
           title: '启动方式被 Windows 脚本绑定',
           file: windowsScripts[0],
+          line: 1,
           detail: '仓库只有 Windows 脚本，没有 .sh 或跨平台的 npm 脚本',
           remediation: '补一个 .sh 或把启动逻辑放进 package.json 的 scripts',
         }),

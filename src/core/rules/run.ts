@@ -20,6 +20,7 @@ export function runRules(ctx: ScanContext): Finding[] {
           severity: isLibrary ? 'info' : 'major',
           title: isLibrary ? '这是库，没有启动脚本（正常）' : 'package.json 没有 start / dev 脚本',
           file: packageJsonPath ?? 'package.json',
+          line: 1,
           detail: isLibrary
             ? 'package.json 声明了 bin / exports，属于被引用的库，不需要 start 脚本'
             : '既无 scripts.start 也无 scripts.dev，也没有 Makefile 或 docker-compose 兜底',
@@ -30,39 +31,44 @@ export function runRules(ctx: ScanContext): Finding[] {
       );
     }
 
-    // RUN-03：脚本引用的入口文件不存在
-    for (const [name, command] of Object.entries(scripts)) {
-      const m = String(command).match(FILE_TOKEN);
-      if (!m) continue;
-      const target = m[1].replace(/^\.\//, '');
-      if (target.startsWith('-')) continue;
-      if (ctx.files.files.has(target)) continue;
-      const pkgLines = ctx.files.files.get(packageJsonPath ?? 'package.json')?.lines ?? [];
-      const line = pkgLines.findIndex((l) => l.includes(`"${name}"`)) + 1 || 1;
-      out.push(
-        mkFinding(ctx, {
-          ruleId: 'RUN-03',
-          group: 'run',
-          severity: 'major',
-          title: `启动脚本引用的文件不存在：${target}`,
-          file: packageJsonPath ?? 'package.json',
-          line,
-          excerpt: `"${name}": "${command}"`,
-          detail: `scripts.${name} 指向 ${target}，但该路径不在仓库中（常见于忘记提交构建产物）`,
-          remediation: '改为指向存在的源文件，或在启动前先执行构建',
-        }),
-      );
+    // RUN-03：脚本引用的入口文件不存在。
+    // 快照不完整时，缺少文件可能只是没被回退拉到，不能据此判错。
+    if (!ctx.degraded) {
+      for (const [name, command] of Object.entries(scripts)) {
+        const m = String(command).match(FILE_TOKEN);
+        if (!m) continue;
+        const target = m[1].replace(/^\.\//, '');
+        if (target.startsWith('-')) continue;
+        if (ctx.files.files.has(target)) continue;
+        const pkgLines = ctx.files.files.get(packageJsonPath ?? 'package.json')?.lines ?? [];
+        const line = pkgLines.findIndex((l) => l.includes(`"${name}"`)) + 1 || 1;
+        out.push(
+          mkFinding(ctx, {
+            ruleId: 'RUN-03',
+            group: 'run',
+            severity: 'major',
+            title: `启动脚本引用的文件不存在：${target}`,
+            file: packageJsonPath ?? 'package.json',
+            line,
+            excerpt: `"${name}": "${command}"`,
+            detail: `scripts.${name} 指向 ${target}，但该路径不在仓库中（常见于忘记提交构建产物）`,
+            remediation: '改为指向存在的源文件，或在启动前先执行构建',
+          }),
+        );
+      }
     }
   }
 
   if (primaryLang === 'python' && !pythonEntry) {
+    const pySource = [...ctx.files.files.keys()].find((p) => p.toLowerCase().endsWith('.py'));
     out.push(
       mkFinding(ctx, {
         ruleId: 'RUN-02',
         group: 'run',
         severity: 'major',
         title: 'Python 项目找不到入口',
-        file: 'pyproject.toml',
+        file: pySource ?? 'pyproject.toml',
+        line: 1,
         detail: '没有 __main__.py / main.py / app.py，也没有 if __name__ == "__main__" 的入口',
         remediation: '提供明确的入口文件，或申报 [project.scripts]',
       }),
@@ -80,6 +86,7 @@ export function runRules(ctx: ScanContext): Finding[] {
           severity: 'minor',
           title: '缺少依赖安装命令',
           file: readme ?? pythonDeps.path,
+          line: 1,
           detail: '有 Python 依赖清单，但 README 与脚本中都没有安装依赖的命令',
           remediation: '在 README 中加入 pip install -r requirements.txt 之类的命令',
         }),

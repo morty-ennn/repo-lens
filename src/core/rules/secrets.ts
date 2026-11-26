@@ -107,6 +107,7 @@ export function secretRules(ctx: ScanContext): Finding[] {
         severity: envRelevant ? 'major' : 'info',
         title: gitignore ? '.gitignore 未忽略 .env' : '仓库没有 .gitignore',
         file: '.gitignore',
+        line: gitignore ? 1 : undefined,
         detail: gitignore
           ? envRelevant
             ? '.gitignore 中没有 .env 相关规则，本地凭证容易被误提交'

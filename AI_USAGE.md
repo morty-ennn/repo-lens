@@ -17,7 +17,7 @@
 
 1. 让 AI 把题面翻译成 `constitution / spec / plan / tasks`（见 [`specs/001-repo-health/`](specs/001-repo-health/)），**规则必须写成可机器判定的句子**。
 2. 每次让 AI 写代码，上下文里都带上 constitution 摘要 + `types.ts` 的类型定义。
-3. 每写完一个模块立刻 `npm run typecheck`，再用真实仓库跑一遍。
+3. 每写完一个模块立刻 `npm run typecheck`（Node 类型剥离语法检查）和 `npm test`，再用真实仓库跑一遍。
 4. 每发现一处偏差，回填 spec §9「实现偏差记录」，不悄悄改。
 
 ---
@@ -45,7 +45,8 @@
 
 | 关卡 | 手段 | 抓什么 |
 |---|---|---|
-| 类型 | `npm run typecheck` | 接口对不上、类型撒谎 |
+| 语法 / 模块 | `npm run typecheck`（Node 类型剥离） | 语法错误、非法 import；**不是** tsc 全量类型检查 |
+| 规则回归 | `npm test` | 占位符误报、上下文泄漏、评分边界、URL 形态 |
 | 契约 | 报告 JSON 对照 [`data-model.md`](specs/001-repo-health/data-model.md) | 字段缺失、结构漂移 |
 | 事实 | 拿真实仓库跑，逐条打开 GitHub 对应行核对 | 规则误报/漏报、行号错位 |
 | 幂等 | 同一 commit 跑两次比对结果 | 隐式随机性、时间依赖 |
@@ -103,7 +104,8 @@
 
 ## 7. 已知技术债
 
-- 规则没有单元测试（spec §9 **D-2**），验证依赖真实仓库 + 人工核对。
-- 增量更新只有设计，没有实现（**D-3**）。
+- 规则测试覆盖了核心回归场景（占位符、脱敏、上下文降级、评分边界、URL 形态、13 条合成规则），但**没有做到每条规则正反例全覆盖**。
+- `npm run typecheck` 是 Node 类型剥离后的语法检查，不是 `tsc --noEmit` 的完整类型检查；零依赖约束下没有引入 TypeScript devDependency。
+- 增量更新、报告缓存、离线 fixture 只有设计或未实现（**D-3 / D-4**）。
 - 中文 README 的「安装 / 安装步骤」标题识别依赖关键词表，覆盖面一般。
 - `SEC-08` 高熵规则虽然已经用「配置文件 + 密钥词 + 熵 ≥ 4.5」三道条件收窄，仍可能对 base64 片段误报。

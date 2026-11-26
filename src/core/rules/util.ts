@@ -1,4 +1,4 @@
-import { clip, isCommentLine, isDocsOrFixturePath, shannonEntropy } from '../lexicon.ts';
+import { basename, clip, extOf, isCommentLine, isDocsOrFixturePath, shannonEntropy } from '../lexicon.ts';
 import type { Finding, RuleGroup, ScanContext, Severity } from '../types.ts';
 
 const BASE_WEIGHT: Record<Severity, number> = { critical: 100, major: 50, minor: 20, info: 5 };
@@ -27,7 +27,7 @@ const CONTEXT_RADIUS = 2;
  */
 export function mkFinding(ctx: ScanContext, input: FindingInput): Finding {
   const lineText = input.line ? ctx.files.files.get(input.file)?.lines?.[input.line - 1] ?? '' : '';
-  const noisy = isDocsOrFixturePath(input.file) || (lineText ? isCommentLine(lineText) : false);
+  const noisy = isDocsOrFixturePath(input.file) || (lineText ? isCommentLine(lineText, input.file) : false);
 
   let severity = input.severity;
   let downgradedFrom: Severity | undefined;
@@ -60,8 +60,41 @@ export function mkFinding(ctx: ScanContext, input: FindingInput): Finding {
 const TOKEN = /[A-Za-z0-9_\-+/=.]{12,}/g;
 const SECRET_PREFIX = /^(sk-|AKIA|AKID|LTAI|ghp_|github_pat_|xox[baprs]-)/;
 
-function maskLine(text: string): string {
-  return text.replace(TOKEN, (m) => {
+/** `.env` / `.env.*` / `*.env` 视为整行键值都可能是凭证 */
+function isEnvLikePath(file: string | undefined): boolean {
+  if (!file) return false;
+  const b = basename(file).toLowerCase();
+  return b.startsWith('.env') || extOf(file) === 'env';
+}
+
+/**
+ * 赋值脱敏：`API_KEY=xxx` / `"api_key": "xxx"` / `apiKey = 'xxx'`。
+ * `.env` 类文件不看键名，一律遮住右值；其他文件只在键名像凭证时遮。
+ */
+function maskAssignments(text: string, file: string | undefined): string {
+  if (isEnvLikePath(file)) {
+    const m = text.match(/^(\s*(?:#\s*)?(?:export\s+)?[A-Za-z_][A-Za-z0-9_.-]*\s*=\s*)(.*)$/);
+    if (m && m[2].trim()) return `${m[1]}「已脱敏 ${m[2].trim().length} 字符」`;
+    return text;
+  }
+
+  return text.replace(
+    /((?:["']?[A-Za-z0-9_.-]*?(?:key|token|secret|pass(?:word)?|pwd|credential|auth|signature|salt)[A-Za-z0-9_.-]*["']?)\s*[:=]\s*)(["']?)([^\s"',;#]{4,})\2/gi,
+    (_full, head: string, quote: string, value: string) => `${head}${quote}「已脱敏 ${value.length} 字符」${quote}`,
+  );
+}
+
+/**
+ * 上下文行脱敏。层次比 excerpt 更宽：
+ * 1. 赋值右值（`.env` 全遮，其他按敏感键名）；
+ * 2. 已知密钥前缀 / Bearer；
+ * 3. 长且高熵的 token。
+ * 目的：即使某条 finding 本身不是密钥类，也不能把邻行的短凭证带出来。
+ */
+function maskLine(text: string, file: string | undefined): string {
+  let out = maskAssignments(text, file);
+  out = out.replace(/(\bBearer\s+)([A-Za-z0-9._~+/=-]{8,})/gi, (_m, head: string, token: string) => `${head}「已脱敏 ${token.length} 字符」`);
+  return out.replace(TOKEN, (m) => {
     if (SECRET_PREFIX.test(m)) return '「已脱敏凭证」';
     if (m.length >= 20 && shannonEntropy(m) >= 3.5) return `「已脱敏 ${m.length} 字符」`;
     return m;
@@ -80,7 +113,7 @@ function buildContext(
   const to = Math.min(lines.length, line + CONTEXT_RADIUS);
   const out: { line: number; text: string }[] = [];
   for (let i = from; i <= to; i++) {
-    out.push({ line: i, text: maskLine(clip(lines[i - 1] ?? '', 160)) });
+    out.push({ line: i, text: maskLine(clip(lines[i - 1] ?? '', 160), file) });
   }
   return out;
 }

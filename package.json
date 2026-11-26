@@ -11,6 +11,8 @@
     "dev": "node start.mjs",
     "start": "node start.mjs",
     "smoke": "node tools/smoke.ts",
-    "selfcheck": "node tools/rules-check.ts"
+    "selfcheck": "node tools/rules-check.ts",
+    "test": "node --test --experimental-test-isolation=none tools/rules.test.ts tools/score.test.ts tools/parse-url.test.ts",
+    "typecheck": "node tools/typecheck.ts"
   }
 }

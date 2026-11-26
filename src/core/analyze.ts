@@ -1,7 +1,7 @@
 import { performance } from 'node:perf_hooks';
 import { AnalyzeError } from './errors.ts';
 import { buildAdvice } from './advice.ts';
-import { fetchRepoMeta, fetchTarball } from './github.ts';
+import { fetchFallbackSnapshot, fetchRepoMeta, fetchTarball } from './github.ts';
 import { MAX_FILES, RULESET_VERSION } from './lexicon.ts';
 import { buildManifest } from './manifest.ts';
 import { parseRepoUrl } from './parse-url.ts';
@@ -9,7 +9,7 @@ import { runRules, sortFindings } from './rules/index.ts';
 import { mkFinding } from './rules/util.ts';
 import { scoreReport } from './score.ts';
 import { unpackTarball } from './unpack.ts';
-import type { Finding, Report, RepoFiles, ScanContext } from './types.ts';
+import type { FileRecord, Finding, Report, RepoFiles, ScanContext } from './types.ts';
 
 export interface AnalyzeOptions {
   useLLM?: boolean;
@@ -24,11 +24,32 @@ export async function analyzeUrl(input: string, opts: AnalyzeOptions = {}): Prom
   const meta = await fetchRepoMeta(parsed.owner, parsed.repo, parsed.ref);
   const t2 = performance.now();
 
-  const tarball = await fetchTarball(meta.owner, meta.repo, meta.commitSha);
-  const t3 = performance.now();
+  let files: Map<string, FileRecord>;
+  let skipped = 0;
+  let t3 = t2;
+  let t4 = t2;
+  let degradedSnapshot = false;
+  const degradations: string[] = [];
 
-  const { files, skipped } = await unpackTarball(tarball);
-  const t4 = performance.now();
+  try {
+    const tarball = await fetchTarball(meta.owner, meta.repo, meta.commitSha);
+    t3 = performance.now();
+    const unpacked = await unpackTarball(tarball);
+    t4 = performance.now();
+    files = unpacked.files;
+    skipped = unpacked.skipped;
+  } catch (err) {
+    // codeload 失败、超大包、解包异常：回退为 Contents API 关键文件分析，不把整个请求判死。
+    const fallback = await fetchFallbackSnapshot(meta.owner, meta.repo, meta.commitSha);
+    t3 = performance.now();
+    t4 = t3;
+    if (fallback.size === 0) throw err;
+    files = fallback;
+    skipped = 0;
+    degradedSnapshot = true;
+    const code = err instanceof AnalyzeError ? err.code : 'UNKNOWN';
+    degradations.push(`快照拉取/解包失败（${code}），已回退为关键文件分析，结果可能不完整`);
+  }
 
   const repo: RepoFiles = {
     owner: meta.owner,
@@ -39,9 +60,8 @@ export async function analyzeUrl(input: string, opts: AnalyzeOptions = {}): Prom
   };
 
   const manifest = buildManifest(repo);
-  const ctx: ScanContext = { files: repo, manifest, rulesetVersion: RULESET_VERSION };
+  const ctx: ScanContext = { files: repo, manifest, rulesetVersion: RULESET_VERSION, degraded: degradedSnapshot };
 
-  const degradations: string[] = [];
   let findings: Finding[] = runRules(ctx);
 
   if (files.size >= MAX_FILES) {
@@ -64,7 +84,7 @@ export async function analyzeUrl(input: string, opts: AnalyzeOptions = {}): Prom
   const t5 = performance.now();
 
   const score = scoreReport(findings, { empty: files.size === 0 });
-  if (files.size >= MAX_FILES) score.confidence = 'sampled';
+  if (degradedSnapshot || files.size >= MAX_FILES) score.confidence = 'sampled';
   const t6 = performance.now();
 
   const advice = await buildAdvice(score, findings, opts.useLLM ?? true);

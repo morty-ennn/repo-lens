@@ -2,7 +2,7 @@
 
 > 粘贴一个公开 GitHub 仓库地址，几秒内得到一份**可回溯**的接入体检报告：
 > 能不能跑、换了机器能不能配、敢不敢公开。
-> 每条结论都指向 `文件:行号`，每份报告都绑定在一个具体的 commit 上。
+> 每条结论都指向具体文件，能定位时带 `文件:行号`，每份报告都绑定在一个具体的 commit 上。
 
 48 小时实战题实现。规格文档在 [`specs/001-repo-health/`](specs/001-repo-health/)，AI 使用记录在 [`AI_USAGE.md`](AI_USAGE.md)。
 
@@ -21,6 +21,7 @@ npm run dev        # 等价于 node start.mjs
 - **零第三方依赖**：`package.json` 里没有 `dependencies`，`npm install` 是空操作，克隆下来直接能跑。
 - **零构建**：没有 bundler、没有 `tsc` 编译步骤，改完代码重启即可。
 - **不需要任何配置文件**。
+- 报告页右上角可「下载 JSON」，文件名含短 SHA，内容含完整 `commitSha`，便于回查。
 
 可选环境变量（都不配也能跑）：
 
@@ -104,6 +105,8 @@ total = round(0.35 × 可运行性 + 0.25 × 可配置性 + 0.40 × 安全性)
 ```bash
 node tools/smoke.ts https://github.com/pallets/flask   # 真实仓库，打印评分与结论
 npm run selfcheck                                       # 合成仓库，断言 13 条规则都触发
+npm test                                                # 规则 / 评分 / URL 解析回归测试
+npm run typecheck                                       # 零依赖语法检查（非 tsc 全量类型检查）
 ```
 
 第二个脚本是「防回归」用的：正则写错、规则被抑制层吃掉、ruleId 改了没同步，都会在这里现形。
@@ -139,7 +142,7 @@ flowchart LR
 ## 更新跟踪设计
 
 > 题面要求：说明怎么发现更新、怎么避免全量重算、报告如何标注 commit、失败或限流怎么兜底。
-> **本期只实现了「报告绑定 commit」和「按 commit 内容寻址的报告缓存」，增量重算是设计，代码未实现**，这里如实说明。
+> **本期只实现了「报告绑定 commit」；报告缓存、文件级 findings 缓存与增量重算都只是设计，代码未实现**，这里如实说明。
 
 ### 1. 怎么发现更新
 
@@ -210,8 +213,10 @@ flowchart LR
 ## 已知局限
 
 - **只支持 GitHub 公开仓库**。私有仓库要 OAuth，本期不做。
+- **报告缓存、离线 fixture 与 `compare` 增量未实现**。重复分析会重新下载快照；更新跟踪章节是设计说明，不是现有能力。
 - **只识别 Node 和 Python 生态**。分析 Java/Rust 仓库时依赖项会显示「未识别」，不会假装它「没有依赖」——未知和缺失是两件事。
 - **超大仓库**（> 60MB 压缩包 / > 5000 文件）会截断，报告标注 `sampled`。
+- **tarball 失败会降级**：回退为 Contents API 的关键文件分析（README / 依赖清单 / 入口），报告会写入 `degradations` 并标记 `confidence: sampled`；此时行级结论可能不完整。
 - **密钥检测是正则 + 熵**，不是真正的凭据验证。它只能告诉你「这里长得像密钥」，不能告诉你「这个密钥还有效」。
 - **不执行仓库里的任何代码**，也不安装它的依赖。所有判断都是静态的。
 
@@ -234,6 +239,9 @@ src/core/             分析内核，不依赖任何 HTTP / DOM
   score.ts            扣分、封顶、等级
   advice.ts           规则引擎建议 + LLM 适配与降级
 tools/smoke.ts        冒烟测试：直接跑内核 + 断言不变量
+tools/rules-check.ts  合成「全踩」仓库，断言 13 条规则
+tools/*.test.ts       node:test 回归：占位符、脱敏、评分边界、URL 解析
+tools/typecheck.ts    零依赖语法检查（Node 类型剥离）
 specs/                规格文档（SDD）
 ```
 

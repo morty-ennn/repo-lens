@@ -8,6 +8,8 @@ const healthEl = document.getElementById('health');
 
 let timer = null;
 let elapsed = 0;
+let findingsExpanded = false;
+const FINDINGS_PAGE = 20;
 
 /* ---------------- 工具 ---------------- */
 
@@ -130,7 +132,7 @@ function groupsHtml(findings) {
   }).join('');
 }
 
-function findingsHtml(findings) {
+function findingsHtml(findings, expanded) {
   if (findings.length === 0) {
     return `<div class="empty-hint">没有发现问题。这个仓库在 README、依赖、启动脚本、跨平台与密钥五方面都没踩到规则。</div>`;
   }
@@ -141,7 +143,8 @@ function findingsHtml(findings) {
     .map((s) => `<span class="sev sev-${s}">${SEV_LABEL[s]} ${counts[s]}</span>`)
     .join('');
 
-  const rows = findings
+  const visible = expanded ? findings : findings.slice(0, FINDINGS_PAGE);
+  const rows = visible
     .map((f, i) => {
       const ctx = (f.context || [])
         .map(
@@ -169,10 +172,18 @@ function findingsHtml(findings) {
     })
     .join('');
 
+  const more =
+    findings.length > FINDINGS_PAGE
+      ? `<button class="btn" id="toggle-findings" style="margin-top:14px;padding:8px 16px;font-size:12.5px">
+          ${expanded ? '收起，只看前 20 条' : `展开全部 ${findings.length} 条（当前显示 ${FINDINGS_PAGE} 条）`}
+        </button>`
+      : '';
+
   return `<div style="display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap;font-size:12.5px">
       <span style="color:var(--muted)">共 ${findings.length} 条</span>${summary}
     </div>
-    <div class="risk-list">${rows}</div>`;
+    <div class="risk-list">${rows}</div>
+    ${more}`;
 }
 
 function adviceHtml(advice) {
@@ -197,8 +208,49 @@ function adviceHtml(advice) {
   </div>`;
 }
 
+function bindFindings(report) {
+  output.querySelectorAll('.finding-row').forEach((row) => {
+    row.addEventListener('click', () => {
+      const body = row.parentElement.querySelector('.finding-body');
+      const caret = row.querySelector('.caret');
+      if (!body) return;
+      body.hidden = !body.hidden;
+      caret.textContent = body.hidden ? '▼' : '▲';
+    });
+  });
+
+  const toggle = document.getElementById('toggle-findings');
+  if (toggle) {
+    toggle.addEventListener('click', () => {
+      findingsExpanded = !findingsExpanded;
+      const wrap = document.getElementById('risk-list-wrap');
+      if (!wrap) return;
+      wrap.innerHTML = findingsHtml(report.findings, findingsExpanded);
+      bindFindings(report);
+    });
+  }
+}
+
+function bindExport(report) {
+  const btn = document.getElementById('export-json');
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    const name = `repo-lens-${report.source.owner}-${report.source.repo}-${report.source.shortSha}.json`;
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  });
+}
+
 function renderReport(r) {
   stopTimer();
+  findingsExpanded = false;
   const s = r.source;
   const color = GRADE_COLOR[r.score.grade] || '#8695a6';
 
@@ -223,7 +275,9 @@ function renderReport(r) {
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
           <span class="badge"><span class="dot"></span>规则集 v${esc(r.rulesetVersion)}</span>
+          ${r.score.confidence === 'sampled' ? '<span class="badge" style="color:var(--warn)">抽样 / 降级分析</span>' : ''}
           ${s.archived ? '<span class="badge" style="color:var(--warn)">仓库已归档</span>' : ''}
+          <button class="btn" id="export-json" style="padding:7px 14px;font-size:12.5px">下载 JSON</button>
         </div>
       </div>
     </div>
@@ -247,7 +301,7 @@ function renderReport(r) {
     }
 
     <div class="card"><p class="card-title">检测覆盖面</p><div class="groups">${groupsHtml(r.findings)}</div></div>
-    <div class="card"><p class="card-title">主要风险清单</p>${findingsHtml(r.findings)}</div>
+    <div class="card"><p class="card-title">主要风险清单</p><div id="risk-list-wrap">${findingsHtml(r.findings, findingsExpanded)}</div></div>
 
     ${adviceHtml(r.advice)}
 
@@ -257,15 +311,8 @@ function renderReport(r) {
     </div>
   </div>`;
 
-  output.querySelectorAll('.finding-row').forEach((row) => {
-    row.addEventListener('click', () => {
-      const body = row.parentElement.querySelector('.finding-body');
-      const caret = row.querySelector('.caret');
-      if (!body) return;
-      body.hidden = !body.hidden;
-      caret.textContent = body.hidden ? '▼' : '▲';
-    });
-  });
+  bindFindings(r);
+  bindExport(r);
 }
 
 /* ---------------- 交互 ---------------- */

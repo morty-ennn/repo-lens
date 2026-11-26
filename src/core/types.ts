@@ -65,6 +65,8 @@ export interface ScanContext {
   files: RepoFiles;
   manifest: ManifestInfo;
   rulesetVersion: string;
+  /** true = 快照不完整（回退为关键文件 / 抽样），依赖完整文件集的规则应保守跳过 */
+  degraded?: boolean;
 }
 
 export interface Deduction {
