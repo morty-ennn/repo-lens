@@ -9,8 +9,8 @@
 
 评审人只做三件事：clone、装依赖、跑一条命令。
 
-- 契约：`pnpm install && pnpm dev` → 打开 `http://localhost:3000` 即可用。
-- 不要求 `.env`、不要求 Docker、不要求数据库、不要求登录。
+- 契约：`npm run dev`（等价 `node start.mjs`）→ 打开 `http://localhost:3000` 即可用。
+- 不要求 `.env`、不要求 Docker、不要求数据库、不要求登录，**不要求构建步骤与第三方依赖**。
 - **验证**：干净目录 clone，删除所有 `.env*` 与 `.cache/`，执行上述命令，30 秒内页面可交互。
 
 ## 第二条 · 零配置降级，但不降级为假数据

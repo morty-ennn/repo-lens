@@ -1,0 +1,16 @@
+{
+  "name": "repo-lens",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Git 仓库接入体检：六组规则 + 接入就绪度评分，零依赖、零构建",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "scripts": {
+    "dev": "node start.mjs",
+    "start": "node start.mjs",
+    "smoke": "node tools/smoke.ts",
+    "selfcheck": "node tools/rules-check.ts"
+  }
+}

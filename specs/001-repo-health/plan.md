@@ -9,11 +9,11 @@
 
 | 层 | 选择 | 理由 |
 |---|---|---|
-| 框架 | Next.js 15（App Router）+ React 19 + TypeScript 5 | 前后端同进程，`pnpm dev` 一条命令满足 Constitution 第一条 |
-| 样式 | Tailwind CSS v4 | 零运行时，无需 design token 构建链 |
+| 框架 | Next.js 15（App Router）+ React 19 + TypeScript 5 | 前后端同进程，`npm run dev` 一条命令满足 Constitution 第一条 |
+| 样式 | 原生 CSS（CSS 变量 + 单文件 `globals.css`） | 少一个构建链，48 小时内变量越少越好 |
 | 解包 | `tar-stream` + Node `zlib` | 流式，不落盘、不整包 buffer |
-| 校验 | `zod` | API 出入参与 LLM 输出共用一套 schema |
-| 测试 | Vitest | 与 Vite 系生态一致，纯函数测试极快 |
+| 校验 | 手写类型守卫 | LLM 输出只有 3 个字段，引 `zod` 不划算 |
+| 测试 | `tsc --noEmit` + 真实仓库端到端 | 本期不引测试框架，规则验证靠跑真实仓库 + 人工核对 |
 | 存储 | 无数据库；`.cache/` 目录 JSON | 单机工具，避免引入服务 |
 | 图表 | 原生 SVG（分数环、子分条） | 引入 chart 库为两个图形不值当 |
 

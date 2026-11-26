@@ -7,7 +7,7 @@
 
 | ID | 任务 | 产出 | 验证 | 估时 | 依赖 |
 |---|---|---|---|---|---|
-| T-01 | 初始化 Next.js 15 + TS + Tailwind + Vitest | 可 `pnpm dev` 的骨架 | `pnpm dev` 打开 3000 端口；`pnpm test` 跑通 1 个空测试 | 40m | — |
+| T-01 | 初始化 Next.js 15 + TS + 原生 CSS | 可 `npm run dev` 的骨架 | `npm run dev` 打开 3000 端口；`npm run typecheck` 通过 | 40m | — |
 | T-02 | 落 `types.ts` 与 `ruleset.ts` | 类型 + 规则注册表 + `rulesetVersion='1.0.0'` | `tsc --noEmit` 通过 | 30m | T-01 |
 | T-03 | 造 3 个 fixture 仓库 | `tests/fixtures/*` | 每个 fixture 能被 `repoFilesFromDir()` 读入内存 | 20m | T-02 |
 

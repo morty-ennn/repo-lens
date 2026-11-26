@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Repo Lens · Git 仓库接入体检</title>
+    <meta
+      name="description"
+      content="输入一个公开 GitHub 仓库地址，自动检查 README、依赖清单、启动脚本、Windows 专属脚本、硬编码路径与密钥风险，给出接入就绪度评分。"
+    />
+    <link rel="stylesheet" href="/style.css" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%230d131b'/><circle cx='16' cy='16' r='7' fill='none' stroke='%233ddc97' stroke-width='2.5'/></svg>"
+    />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark">◉</div>
+          <div>
+            <div class="brand-name">Repo Lens</div>
+            <div class="brand-sub">Git 仓库接入体检</div>
+          </div>
+        </div>
+        <span class="badge" id="health" hidden></span>
+      </header>
+
+      <section class="hero">
+        <h1>粘贴一个仓库地址，<br />看清它<em>能不能直接接入</em>。</h1>
+        <p>
+          README、依赖清单、启动脚本是否齐全；有没有 Windows 专属脚本、硬编码路径；有没有把密钥提交进仓库。
+          每条结论都指向具体的文件和行号，报告绑定在某个 commit 上。
+        </p>
+
+        <form class="form" id="form">
+          <div class="input-wrap">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" />
+              <path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" />
+            </svg>
+            <input
+              class="input"
+              id="url"
+              placeholder="https://github.com/owner/repo"
+              spellcheck="false"
+              autocomplete="off"
+            />
+          </div>
+          <button class="btn" type="submit" id="submit">开始体检</button>
+        </form>
+
+        <div class="samples" id="samples">
+          <span>试试：</span>
+          <button type="button" class="chip" data-repo="expressjs/express">expressjs/express</button>
+          <button type="button" class="chip" data-repo="pallets/flask">pallets/flask</button>
+          <button type="button" class="chip" data-repo="chalk/chalk">chalk/chalk</button>
+        </div>
+      </section>
+
+      <div id="output">
+        <div class="empty-hint" style="padding-top: 10px">
+          只读取公开仓库的快照，不克隆、不执行仓库里的任何代码。耗时取决于到 GitHub 的网络。
+        </div>
+      </div>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

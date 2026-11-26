@@ -4,7 +4,7 @@
 |---|---|
 | 特性 ID | `001-repo-health` |
 | 版本 | v1.0（待评审） |
-| 评审方式 | 本地 `pnpm install && pnpm dev`（见 Constitution 第一条） |
+| 评审方式 | 本地 `npm install && npm run dev`（见 Constitution 第一条） |
 | 规则集版本 | `rulesetVersion = 1.0.0` |
 | 依据 | 48 小时实战题《Git 仓库接入体检》 |
 
@@ -189,6 +189,7 @@
 | `SEC-06` | 无 `.gitignore`，或 `.gitignore` 中无 `.env` 相关规则 | major |
 | `SEC-07` | `ghp_` / `github_pat_` / `xoxb-` 形态的 Token | critical |
 | `SEC-08` | 配置类文件（`.env*`、`.json`、`.yml`、`.toml`、`config.*`）中出现 Shannon 熵 ≥ 4.5 且长度 ≥ 20 的字符串赋值 | major |
+| `SEC-10` | `AKIA[0-9A-Z]{16}`（AWS Access Key） | critical |
 | `SEC-09` | 命中上述任一规则，但值属于占位符白名单（`your`、`xxx`、`<...>`、`***`、`changeme`、`example`、`dummy`、`test`、`os.environ`、`process.env`、`${`）→ 强制降为 `info` | 抑制规则 |
 
 > `SEC-09` 是必须的：否则 `.env.example` 会把演示仓库自己打爆，评审人第一印象就是"误报太多"。
@@ -292,7 +293,7 @@
 
 ## 8. 验收清单（Definition of Done）
 
-- [ ] 干净 clone 后 `pnpm install && pnpm dev` 一条命令跑通，无 `.env` 也能分析至少 1 个真实仓库
+- [ ] 干净 clone 后 `npm install && npm run dev` 一条命令跑通，无 `.env` 也能分析至少 1 个真实仓库
 - [ ] 六组规则全部有单测，每条规则至少 1 正例 1 反例
 - [ ] `SEC-09` 占位符白名单有测试，`.env.example` 不被误报为 critical
 - [ ] 同一 SHA 连跑两次 `findings` 与 `score` 完全一致
@@ -304,3 +305,20 @@
 - [ ] README 含：架构图、评分说明、更新跟踪设计、局限说明
 - [ ] `AI_USAGE.md` 含 ≥1 条"AI 答错且被发现"的记录
 - [ ] 所有 finding 都有 `file`，UI 无"无证据结论"
+
+---
+
+## 9. 实现偏差记录（v1.0 交付时回填）
+
+SDD 允许偏差，但不允许**悄悄**偏差。以下每条都是实现过程中对上文的修订，原因一并记录。
+
+| # | 原条款 | 实际做法 | 原因 |
+|---|---|---|---|
+| D-1 | `pnpm install && pnpm dev` | `npm install && npm run dev` | 目标机器未装 pnpm；npm 随 Node 自带，少一个前置依赖 |
+| D-2 | 每条规则至少 1 正例 1 反例单测 | 未引入测试框架；改为 `tsc --noEmit` + 真实仓库端到端 + 人工核对 findings | 48 小时窗口里，测试框架的搭建维护成本高于收益；规则保持纯函数，后续可随时补测 |
+| D-3 | 文件级 findings 缓存、compare 增量、「检测更新」按钮 | 只实现「报告绑定 commit」，增量更新写入 README 设计章节 | 题面第 5 条明确「设计说明即可，不强制实现」 |
+| D-4 | 3 个离线 fixture + 导出 JSON | 未实现 | 演示依赖真实仓库；断网场景在 README 的局限里说明 |
+| D-5 | 证据上下文从缓存快照读取 | 改为 finding 内嵌 ±2 行 `context` | 报告自包含，展开无需二次请求，也不把整份源码带进缓存 |
+| D-6 | 密钥命中在注释/文档中降级为 `info` | 密钥组不参与上下文降级，只由占位符白名单（`SEC-09`）抑制 | 注释里的真密钥依然是泄漏，降级会变成漏报 |
+| D-7 | zod 校验 LLM 输出 | 手写类型守卫 | 输出只有 3 个字段，引入依赖不划算 |
+| D-8 | Next.js 15 全栈单进程 | Node 原生 `http` + 原生 HTML/CSS/JS，TS 由 Node 22 直接运行 | 依赖安装多次卡死（镜像源缓存停在 99MB），交付优先级高于技术栈偏好；换来「克隆即跑、零构建」，代价是失去 React 生态 |
