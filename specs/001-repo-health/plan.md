@@ -9,12 +9,14 @@
 
 | 层 | 选择 | 理由 |
 |---|---|---|
-| 框架 | Next.js 15（App Router）+ React 19 + TypeScript 5 | 前后端同进程，`npm run dev` 一条命令满足 Constitution 第一条 |
-| 样式 | 原生 CSS（CSS 变量 + 单文件 `globals.css`） | 少一个构建链，48 小时内变量越少越好 |
-| 解包 | `tar-stream` + Node `zlib` | 流式，不落盘、不整包 buffer |
+| 运行时 | Node.js ≥ 22.18（原生运行 TypeScript） | 无编译、无 bundler，`npm run dev` 一条命令满足 Constitution 第一条 |
+| 服务 | Node 内置 `http` + `fs` | 零第三方依赖 |
+| 前端 | 原生 HTML / CSS / JS（`public/`） | 单页工具不需要组件框架，省掉整条构建链 |
+| 样式 | 原生 CSS（CSS 变量 + 单文件 `style.css`） | 少一个构建链，48 小时内变量越少越好 |
+| 解包 | 自带最小 tar 解析器 + `node:zlib` | 只认 GitHub tarball 会出现的 header（ustar / GNU longname / PAX），比引库可控 |
 | 校验 | 手写类型守卫 | LLM 输出只有 3 个字段，引 `zod` 不划算 |
-| 测试 | `tsc --noEmit` + 真实仓库端到端 | 本期不引测试框架，规则验证靠跑真实仓库 + 人工核对 |
-| 存储 | 无数据库；`.cache/` 目录 JSON | 单机工具，避免引入服务 |
+| 测试 | `tools/rules-check.ts` 合成仓库断言 + `tools/smoke.ts` 真实仓库 | 不引测试框架，但关键规则有断言，防止正则写错 |
+| 存储 | 无（本期不做缓存与增量） | 单机工具，避免引入服务 |
 | 图表 | 原生 SVG（分数环、子分条） | 引入 chart 库为两个图形不值当 |
 
 **显式不引入**：ORM、状态管理库、UI 组件库、i18n 框架、Docker。
@@ -23,35 +25,29 @@
 
 ## 2. 目录结构
 
+> 下方的 tree 是**计划值**。实际交付按 D-8 换成零依赖方案，落地结构见 README「项目结构」一节。
+
 ```
-app/
-  page.tsx                       输入页（含最近分析与样例入口）
-  report/page.tsx                报告页（?url= 或 ?fixture=）
-  api/analyze/route.ts           POST 分析（全量 / 增量）
-  api/report/route.ts            GET 读取缓存报告
-  api/fixture/[name]/route.ts    GET 离线样例
-src/
-  core/
-    ruleset.ts                   rulesetVersion + 规则注册表
-    github.ts                    元数据 / tarball / commits / compare
-    unpack.ts                    流式 tar → RepoFiles
-    pipeline.ts                  编排 5 个阶段 + 计时
-    scan/
-      index.ts                   按注册表调度，聚合去重
-      readme.ts  deps.ts  run.ts  win.ts  paths.ts  secrets.ts
-      suppress.ts                占位符白名单 + 上下文降级
-      lexicon.ts                 正则与关键词常量（集中编译，防 ReDoS）
-    score.ts                     扣分/封顶/等级
-    explain.ts                   规则文案 + LLM 适配 + schema 校验回退
-    cache.ts                     报告缓存 + 文件级 finding 缓存
-    types.ts                     与 data-model.md 一一对应
-src/ui/
-  components/ScoreRing.tsx  Breakdown.tsx  RiskList.tsx  FindingRow.tsx
-  components/DiffBanner.tsx  AiPanel.tsx  UrlForm.tsx  ErrorState.tsx
-tests/
-  fixtures/{node-good,python-good,bad-everything}/   最小可分析仓库
-  rules/*.test.ts
-  score.test.ts  pipeline.test.ts  api.test.ts
+server.ts                      Node 内置 http：静态文件 + /api/analyze + /api/health
+start.mjs                      版本检查 → 动态加载 server.ts
+public/                        index.html · style.css · app.js（无框架无构建）
+src/core/
+  lexicon.ts                   扩展名表、正则、词表（集中编译，量词带上界）
+  errors.ts                    AnalyzeError（code + httpStatus + hint）
+  parse-url.ts                 owner/repo/ref 解析
+  github.ts                    元数据 + commit SHA + tarball
+  unpack.ts                    自带最小 tar 解析器 + node:zlib
+  manifest.ts                  依赖清单 / 入口 / 脚本识别
+  rules/
+    index.ts                   六组规则聚合 + 同类折叠
+    readme.ts deps.ts run.ts win.ts paths.ts secrets.ts
+    util.ts                    结论工厂：上下文降级、脱敏、排序
+  score.ts                     扣分 / 封顶 / 等级
+  advice.ts                    规则引擎建议 + LLM 适配与降级
+  analyze.ts                   编排 5 个阶段 + 计时
+tools/
+  rules-check.ts               合成「全踩」仓库，断言 13 条规则 + 无密钥泄漏
+  smoke.ts                     真实仓库端到端，断言不变量
 ```
 
 ---
@@ -141,7 +137,7 @@ github.ts ──▶ unpack.ts ──▶ RepoFiles ──▶ scan/* ──▶ Fin
 | 泄漏测试 | 报告 JSON 字符串不包含 fixture 中的原始 token |
 | 网络隔离 | `Fetcher` 通过依赖注入，单测一律 mock，CI 不出网 |
 
-**不做**：真实 GitHub 的集成测试进 CI（限流不可控）。改为 `pnpm verify:live <url>` 手动脚本。
+**不做**：真实 GitHub 的集成测试进 CI（限流不可控）。改为 `node tools/smoke.ts <url>` 手动脚本。
 
 ---
 
